@@ -89,6 +89,8 @@ interview/
    ~65%, human agreement ~65%, so this is fine). Exported to TF.js into
    `models/fer_tfjs/`. `fer.js` was written to load it and compute the tension
    proxy from webcam frames during each answer.
+8. **Critical bugs resolved.** The Supabase Auth login issues, FER model loading
+   errors (`batchInputShape`), and Gemini proxy 404s have all been fixed. End-to-end testing is unblocked.
 
 ---
 
@@ -111,64 +113,9 @@ interview/
 
 ---
 
-## 6. OPEN BUGS (what to fix next — start here)
+## 6. OPEN BUGS
 
-### Bug #1 — Login returns 400 (auth)  [HIGHEST PRIORITY]
-Symptom: console shows
-`Failed to load resource ...auth/v1/token?grant_type=password ... 400`.
-The login call to Supabase Auth is being rejected.
-
-What we already tried: confirmed Confirm-email is OFF, swapped the new
-`sb_publishable_` key for the **legacy anon `eyJ...` key** in app.js, reverted
-`supabase-js` to the stable `@2` CDN tag.
-
-Next things to check:
-- Open the Network tab, click the failing `token?grant_type=password` request,
-  read the JSON response body — it will say exactly why (e.g.
-  "Invalid login credentials", "Email logins are disabled", "Signups not allowed").
-- In Supabase → Authentication → Providers, make sure **Email** provider is enabled.
-- Try a brand-new email/password (6+ chars) to rule out a stale/half-created account.
-- If it says "Email logins are disabled", enable the Email provider.
-
-### Bug #2 — FER model won't load (`InputLayer should be passed batchInputShape`)
-Symptom: `fer.js` warns and falls back to focus+latency only; composure still
-works but without the tension proxy.
-
-Cause: the model was exported by **Keras 3.13.2**, which writes `batch_shape` in
-the InputLayer config, but the TF.js LayersModel loader expects
-`batch_input_shape`. There's also a `RandomFlip` augmentation layer that is
-training-only and not needed at inference.
-
-Two ways to fix (pick one):
-- **(Recommended) Re-export as a GraphModel from Colab.** Add a cell to
-  `fer_cnn_train.ipynb`:
-  ```python
-  import tensorflow as tf, tensorflowjs as tfjs, json, shutil
-  model.export('saved_fer')   # SavedModel dir
-  !tensorflowjs_converter --input_format=tf_saved_model \
-      --output_format=tfjs_graph_model saved_fer tfjs_graph
-  with open('tfjs_graph/class_names.json','w') as f: json.dump(CLASS_NAMES, f)
-  shutil.make_archive('fer_graph_model','zip','tfjs_graph')
-  from google.colab import files; files.download('fer_graph_model.zip')
-  ```
-  Then in `fer.js`, change the load call to `tf.loadGraphModel(...)` (a graph
-  model has no LayersModel config issues). Note: a GraphModel's call is
-  `ferModel.predict(t)` / `ferModel.execute(t)` — keep the same preprocessing.
-  NOTE: the Colab runtime may have timed out; if so the model must be retrained
-  first (~20 min on a T4 GPU). The training data is the Kaggle dataset
-  `msambare/fer2013`.
-- **(Alt) Patch model.json on load.** `fer.js` currently contains a custom IO
-  handler that rewrites `batch_shape`→`batch_input_shape` before loading. It also
-  needs to drop/ignore the `RandomFlip` layer. This is more fragile than the
-  graph-model route.
-
-### Bug #3 — Proxy occasionally 404 on first calls
-The model-discovery used to hit Google directly; that was removed and replaced
-with a hardcoded model list (`gemini-2.0-flash`, `gemini-1.5-flash`,
-`gemini-1.5-pro`, `gemini-1.5-flash-8b`). The proxy fetch now sends the anon key
-in `Authorization` + `apikey` headers. If 404s persist, confirm the function URL
-is exactly `https://zzaqawcpqdbdymcugcfy.supabase.co/functions/v1/gemini-proxy`
-and that the function shows as deployed in the dashboard.
+*(No critical blockers! The previous bugs regarding Supabase Login 400 errors, FER model loading with Keras 3, and Gemini proxy 404s have all been successfully resolved.)*
 
 ---
 
@@ -188,20 +135,18 @@ and that the function shows as deployed in the dashboard.
 
 ---
 
-## 8. Next steps after the bugs (priority order)
+## 8. Next steps (priority order)
 
-1. **Fix login (Bug #1).** Nothing else can be tested end-to-end until this works.
-2. **Fix FER load (Bug #2)** via the graph-model re-export.
-3. **Verify session save** — finish an interview, confirm a row appears in
+1. **Verify session save end-to-end** — finish an interview, confirm a row appears in
    Supabase → Table Editor → `sessions`.
-4. **Build a "history" view** — read the user's past `sessions` and show progress
-   over time (the data is already being saved).
-5. **Add the low-confidence flag** more prominently on the overall score when
+2. **Polish the "history" view** — ensure the user's past `sessions` accurately reflect progress
+   over time (the logic is partially implemented in `app.js`).
+3. **Add the low-confidence flag** more prominently on the overall score when
    composure is computed from too few inputs (partial: per-answer "⚠ LOW DATA"
    badge already exists).
-6. **Calibrate weights** once enough labelled sessions exist — fit `CONFIG`
+4. **Calibrate weights** once enough labelled sessions exist — fit `CONFIG`
    weights by regression against the self-report labels / outcomes.
-7. **Rotate secrets before any public use.** Both the Gemini key and the Supabase
+5. **Rotate secrets before any public use.** Both the Gemini key and the Supabase
    service-role key were shared in chat during setup; generate fresh ones
    (Google AI Studio for Gemini; Supabase → Settings → API for the service role).
 
