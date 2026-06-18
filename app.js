@@ -2,6 +2,11 @@ import { FilesetResolver, FaceLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 import { scoreSession, CONFIG } from "./scoring.js";
 import { loadFerModel, inferFrame, computeTensionProxy, isFerReady } from "./fer.js";
 
+// Boot Pendo SDK with an anonymous visitor.
+// The SDK resolves visitor from cookies/localStorage if available,
+// otherwise falls back to a new anonymous visitor.
+pendo.initialize({ visitor: { id: '' } });
+
 // ==========================================
 // 1. API CONFIGURATION & AUTO-DISCOVERY
 // ==========================================
@@ -311,6 +316,9 @@ async function callGeminiDynamic(promptText) {
 }
 
 window.navigateTo = function(viewId) {
+    if (viewId === 'view-login') {
+        pendo.clearSession();
+    }
     document.querySelectorAll('.view, .dashboard-view').forEach(el => el.classList.remove('active-view'));
     document.getElementById(viewId).classList.add('active-view');
     window.scrollTo(0,0);
@@ -350,6 +358,12 @@ window.handleLogin = async function() {
         }
         if (error) throw error;
         currentUser = data.user;
+        pendo.identify({
+            visitor: {
+                id: currentUser.id,
+                email: currentUser.email
+            }
+        });
         document.getElementById('workspaceTitle').textContent = `Workspace: ${currentUser.email.split('@')[0]}`;
         updateAiUsageDisplay();
         await refreshDashboardProfile();
