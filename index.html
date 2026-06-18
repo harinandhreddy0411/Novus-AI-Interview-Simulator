@@ -275,7 +275,7 @@ print("System Ready")</textarea>
         </div>
         <div class="dashboard-layout">
             <div class="sidebar">
-                <div class="video-container"><video id="webcam" autoplay playsinline muted></video></div>
+                <div class="video-container"><video id="webcam" class="pendo-mask" autoplay playsinline muted></video></div>
                 <div class="metrics-panel">
                     <div class="metric-row"><span>Subject Tracking</span><span id="presenceBadge" class="status-badge" style="background:rgba(245,158,11,0.15); color:var(--warning);">CALIBRATING</span></div>
                     <div class="metric-row"><span>Attention Lock</span><span id="gazeBadge" class="status-badge" style="background:rgba(245,158,11,0.15); color:var(--warning);">CALIBRATING</span></div>
@@ -288,7 +288,7 @@ print("System Ready")</textarea>
                 </div>
                 <div class="transcript-box">
                     <h4 style="color:var(--text-muted); font-size:0.8rem; letter-spacing:1px; margin-bottom:10px;">VOCAL STREAM</h4>
-                    <p id="userText" style="color: var(--text-muted); font-style: italic; margin:0;">System standby...</p>
+                    <p id="userText" class="pendo-mask" style="color: var(--text-muted); font-style: italic; margin:0;">System standby...</p>
                 </div>
                 <div style="display: flex; justify-content: flex-end;">
                     <button id="startBtn" class="btn-main" disabled>Awaiting Handshake</button>
