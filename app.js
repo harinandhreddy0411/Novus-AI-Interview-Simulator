@@ -536,9 +536,13 @@ window.openPrepModal = async function(key) {
     }
 
     modalBody.innerHTML = `
-        <div style="text-align: center; padding: 3rem;">
-            <h2 style="color: var(--warning); margin-bottom: 1rem;">Compiling Comprehensive Study Guide...</h2>
-            <p>Generating this module once, then caching it locally for instant access next time.</p>
+        <div style="text-align: center; padding: 4rem 2rem;">
+            <div class="loader-ring"></div>
+            <h2 style="color: var(--warning); margin-bottom: 1rem; animation: text-pulse 2s infinite;">Compiling Comprehensive Study Guide...</h2>
+            <p style="color: var(--text-muted);">Generating textbook-grade module via Gemini AI. This usually takes 10-15 seconds...</p>
+            <div style="margin-top: 2rem; display: flex; justify-content: center; gap: 8px;">
+                <span class="loading-dot"></span><span class="loading-dot" style="animation-delay: 0.2s"></span><span class="loading-dot" style="animation-delay: 0.4s"></span>
+            </div>
         </div>`;
 
     let specializedPrompt = "";
@@ -643,7 +647,7 @@ window.moveOAQuestion = async function(direction) {
 
 window.launchOA = async function(companyKey) {
     navigateTo('view-oa');
-    startOATimer(); // Start the 90:00 timer display
+    document.getElementById('oaTimer').textContent = "--:--"; // Wait for generation to finish
     currentCompanyKey = companyKey;
     
     const oaTopics = ["Arrays", "Strings", "Hashing", "Trees", "Graphs", "Dynamic Programming", "Greedy", "Binary Search", "Sliding Window"];
@@ -667,6 +671,7 @@ window.launchOA = async function(companyKey) {
             problemText.innerHTML = withCachedBadge(cachedProblem, cachedProblem.content);
         }
         terminal.innerHTML = `<span style="color: var(--success);">[System] Cached assessment loaded instantly. Compiler is ready.</span>`;
+        startOATimer(); // Start timer instantly since it loaded from cache
         return;
     }
 
@@ -686,6 +691,7 @@ window.launchOA = async function(companyKey) {
         
         problemText.innerHTML = window.oaQuestionsList[0].html;
         terminal.innerHTML = `<span style="color: var(--success);">[System] Unique problem generated successfully. Awaiting execution payload.</span>`;
+        startOATimer(); // Start timer now that the dynamic problem is loaded
     } catch (err) {
         if (isLimitOrQuotaMessage(err.message)) {
             document.getElementById('oaTitle').textContent = `${companyKey.toUpperCase()} Practice OA`;
@@ -693,6 +699,7 @@ window.launchOA = async function(companyKey) {
             window.currentOAIndex = 0;
             problemText.innerHTML = window.oaQuestionsList[0].html;
             terminal.innerHTML = `<span style="color: var(--warning);">[System] AI quota is temporarily unavailable. Loaded built-in practice problem instead.</span>`;
+            startOATimer(); // Start timer for fallback practice problem
         } else {
             problemText.innerHTML = `<span style="color: var(--danger); font-weight: bold;">API REJECTED REQUEST:</span><br><br><span style="color: #ffb86c;">${err.message}</span>`;
         }
