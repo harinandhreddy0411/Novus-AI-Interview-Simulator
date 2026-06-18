@@ -19,15 +19,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/clike/clike.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-
-    <!-- Novus by Pendo Analytics -->
-    <script>
-        (function(p,e,n,d,o){var v,w,x,y,z;o=p[d]=p[d]||{};o._q=o._q||[];
-        v=['initialize','identify','updateOptions','pageLoad','track','trackAgent'];for(w=0,x=v.length;w<x;++w)(function(m){
-        o[m]=o[m]||function(){o._q[m===v[0]?'unshift':'push']([m].concat([].slice.call(arguments,0)));};})(v[w]);
-        y=e.createElement(n);y.async=!0;y.src='https://cdn.pendo.io/agent/static/9fa51a73-f093-48eb-879e-17ad1dda4b8e/pendo.js';
-        z=e.getElementsByTagName(n)[0];z.parentNode.insertBefore(y,z);})(window,document,'script','pendo');
-    </script>
 </head>
 <body>
 
@@ -284,7 +275,7 @@ print("System Ready")</textarea>
         </div>
         <div class="dashboard-layout">
             <div class="sidebar">
-                <div class="video-container"><video id="webcam" class="pendo-mask" autoplay playsinline muted></video></div>
+                <div class="video-container"><video id="webcam" autoplay playsinline muted></video></div>
                 <div class="metrics-panel">
                     <div class="metric-row"><span>Subject Tracking</span><span id="presenceBadge" class="status-badge" style="background:rgba(245,158,11,0.15); color:var(--warning);">CALIBRATING</span></div>
                     <div class="metric-row"><span>Attention Lock</span><span id="gazeBadge" class="status-badge" style="background:rgba(245,158,11,0.15); color:var(--warning);">CALIBRATING</span></div>
@@ -297,7 +288,7 @@ print("System Ready")</textarea>
                 </div>
                 <div class="transcript-box">
                     <h4 style="color:var(--text-muted); font-size:0.8rem; letter-spacing:1px; margin-bottom:10px;">VOCAL STREAM</h4>
-                    <p id="userText" class="pendo-mask" style="color: var(--text-muted); font-style: italic; margin:0;">System standby...</p>
+                    <p id="userText" style="color: var(--text-muted); font-style: italic; margin:0;">System standby...</p>
                 </div>
                 <div style="display: flex; justify-content: flex-end;">
                     <button id="startBtn" class="btn-main" disabled>Awaiting Handshake</button>
