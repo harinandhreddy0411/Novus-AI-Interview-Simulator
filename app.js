@@ -2,6 +2,11 @@ import { FilesetResolver, FaceLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 import { scoreSession, CONFIG } from "./scoring.js";
 import { loadFerModel, inferFrame, computeTensionProxy, isFerReady } from "./fer.js";
 
+// Initialize Pendo SDK (anonymous baseline)
+if (window.pendo) {
+    pendo.initialize({ visitor: { id: '' } });
+}
+
 // ==========================================
 // 1. API CONFIGURATION & AUTO-DISCOVERY
 // ==========================================
@@ -316,6 +321,11 @@ window.navigateTo = function(viewId) {
     window.scrollTo(0,0);
     updateAiUsageDisplay();
 
+    // Pendo: Clear session on sign-out navigation
+    if (viewId === 'view-login' && window.pendo) {
+        pendo.clearSession();
+    }
+
     // Refresh CodeMirror layout if showing IDE
     if (viewId === 'view-oa' && window.cmEditor) {
         setTimeout(() => window.cmEditor.refresh(), 10);
@@ -351,6 +361,17 @@ window.handleLogin = async function() {
         if (error) throw error;
         currentUser = data.user;
         document.getElementById('workspaceTitle').textContent = `Workspace: ${currentUser.email.split('@')[0]}`;
+        
+        // Pendo: Identify the signed-in user
+        if (window.pendo) {
+            pendo.identify({
+                visitor: {
+                    id: currentUser.id,
+                    email: currentUser.email
+                }
+            });
+        }
+
         updateAiUsageDisplay();
         await refreshDashboardProfile();
         navigateTo('view-dashboard');
