@@ -341,15 +341,22 @@ window.handleLogin = async function() {
     if(!emailInput || !passwordInput) { alert("Please enter both email and password."); return; }
 
     btn.textContent = "Authenticating..."; btn.disabled = true;
+    let isNewAccount = false;
     try {
         let { data, error } = await supabase.auth.signInWithPassword({ email: emailInput, password: passwordInput });
         if (error && (error.status === 400 || error.message.toLowerCase().includes("invalid"))) {
             btn.textContent = "Creating new account...";
             const signupResponse = await supabase.auth.signUp({ email: emailInput, password: passwordInput });
             data = signupResponse.data; error = signupResponse.error;
+            isNewAccount = true;
         }
         if (error) throw error;
         currentUser = data.user;
+        pendo.track('user_authenticated', {
+            auth_method: 'email_password',
+            is_new_account: isNewAccount,
+            email_domain: currentUser.email.split('@')[1] || 'unknown'
+        });
         document.getElementById('workspaceTitle').textContent = `Workspace: ${currentUser.email.split('@')[0]}`;
         updateAiUsageDisplay();
         await refreshDashboardProfile();
@@ -495,6 +502,12 @@ window.loadHistoricalSession = async function(id) {
                 weakestTopic: scored.weakestTopic
             }
         };
+        pendo.track('historical_session_loaded', {
+            session_id: id,
+            session_role: data.role || 'default',
+            session_overall_score: data.overall_score,
+            session_date: data.created_at
+        });
         
         await renderInterviewReport(true);
     } catch (err) {
@@ -517,6 +530,10 @@ window.openPrepModal = async function(key) {
     const cachedGuide = getCachedContent('prep-cache', key);
     if (cachedGuide) {
         modalBody.innerHTML = withCachedBadge(cachedGuide, cachedGuide.content);
+        pendo.track('study_guide_generated', {
+            guide_type: key,
+            content_source: 'cache'
+        });
         return;
     }
 
@@ -536,9 +553,18 @@ window.openPrepModal = async function(key) {
         const generatedText = await callGeminiDynamic(specializedPrompt);
         setCachedContent('prep-cache', key, generatedText);
         modalBody.innerHTML = generatedText;
+        pendo.track('study_guide_generated', {
+            guide_type: key,
+            content_source: 'ai',
+            gemini_model_used: activeResolvedModel
+        });
     } catch (err) {
         if (isLimitOrQuotaMessage(err.message)) {
             modalBody.innerHTML = getPrepFallbackContent(key);
+            pendo.track('study_guide_generated', {
+                guide_type: key,
+                content_source: 'fallback'
+            });
         } else {
             modalBody.innerHTML = `<h3 style="color: var(--danger);">Google API Connection Failed</h3><p style="color:#ffb86c;">${err.message}</p>`;
         }
@@ -611,6 +637,13 @@ window.moveOAQuestion = async function(direction) {
             terminal.innerHTML += `<br><span style="color: var(--success);">[System] Next problem generated.</span>`;
             
             setCachedContent('oa-cache', currentCompanyKey, { list: window.oaQuestionsList });
+            pendo.track('oa_question_generated', {
+                company: currentCompanyKey,
+                topic: nextTopic,
+                question_index: newIndex,
+                content_source: 'ai',
+                total_questions_in_session: window.oaQuestionsList.length
+            });
         } catch (err) {
             problemText.innerHTML = originalHtml + `<br><br><span style="color: var(--danger);">Failed to generate next question.</span>`;
         } finally {
@@ -652,6 +685,10 @@ window.launchOA = async function(companyKey) {
             problemText.innerHTML = withCachedBadge(cachedProblem, cachedProblem.content);
         }
         terminal.innerHTML = `<span style="color: var(--success);">[System] Cached assessment loaded instantly. Compiler is ready.</span>`;
+        pendo.track('oa_session_launched', {
+            company: companyKey,
+            content_source: 'cache'
+        });
         return;
     }
 
@@ -671,6 +708,12 @@ window.launchOA = async function(companyKey) {
         
         problemText.innerHTML = window.oaQuestionsList[0].html;
         terminal.innerHTML = `<span style="color: var(--success);">[System] Unique problem generated successfully. Awaiting execution payload.</span>`;
+        pendo.track('oa_session_launched', {
+            company: companyKey,
+            topic: currentOATopic,
+            content_source: 'ai',
+            gemini_model_used: activeResolvedModel
+        });
     } catch (err) {
         if (isLimitOrQuotaMessage(err.message)) {
             document.getElementById('oaTitle').textContent = `${companyKey.toUpperCase()} Practice OA`;
@@ -678,6 +721,10 @@ window.launchOA = async function(companyKey) {
             window.currentOAIndex = 0;
             problemText.innerHTML = window.oaQuestionsList[0].html;
             terminal.innerHTML = `<span style="color: var(--warning);">[System] AI quota is temporarily unavailable. Loaded built-in practice problem instead.</span>`;
+            pendo.track('oa_session_launched', {
+                company: companyKey,
+                content_source: 'fallback'
+            });
         } else {
             problemText.innerHTML = `<span style="color: var(--danger); font-weight: bold;">API REJECTED REQUEST:</span><br><br><span style="color: #ffb86c;">${err.message}</span>`;
         }
@@ -737,10 +784,34 @@ window.runTestCompilation = async function() {
 
         if (result.compile && result.compile.code !== 0) {
             terminal.innerHTML += `<br><span style="color: var(--danger);">[Compilation Error]</span><br><pre style="margin:0; white-space: pre-wrap; font-family:'Fira Code';">${result.compile.output}</pre>`;
+            pendo.track('code_executed', {
+                language: currentOALanguage,
+                language_version: currentOAVersion,
+                execution_result: 'compile_error',
+                code_length: userCode.length,
+                has_compilation_error: true,
+                has_runtime_error: false
+            });
         } else if (result.run && result.run.code !== 0) {
             terminal.innerHTML += `<br><span style="color: var(--warning);">[Runtime Exception]</span><br><pre style="margin:0; white-space: pre-wrap; font-family:'Fira Code';">${result.run.output}</pre>`;
+            pendo.track('code_executed', {
+                language: currentOALanguage,
+                language_version: currentOAVersion,
+                execution_result: 'runtime_error',
+                code_length: userCode.length,
+                has_compilation_error: false,
+                has_runtime_error: true
+            });
         } else {
             terminal.innerHTML += `<br><span style="color: var(--success);">[Execution Complete] Output:</span><br><pre style="margin:0; white-space: pre-wrap; color: #A7F3D0; font-family:'Fira Code';">${result.run.output}</pre>`;
+            pendo.track('code_executed', {
+                language: currentOALanguage,
+                language_version: currentOAVersion,
+                execution_result: 'success',
+                code_length: userCode.length,
+                has_compilation_error: false,
+                has_runtime_error: false
+            });
         }
     } catch (err) {
         terminal.innerHTML += `<br><span style="color: var(--danger);">[Server Error] Could not reach execution engine.</span>`;
@@ -769,6 +840,16 @@ window.finishOA = async function() {
             composites: null,
             topicScores: { [currentOATopic]: overallScore }
         }, 'oa');
+        pendo.track('oa_submitted', {
+            company: currentCompanyKey,
+            topic: currentOATopic,
+            score: overallScore,
+            has_logic: hasLogic,
+            is_optimal: isOptimal,
+            code_language: currentOALanguage,
+            code_length: userCode.length,
+            time_remaining_seconds: oaTimeRemaining
+        });
         
         terminal.innerHTML += `<br><span style="color: var(--success);">[System] OA Submitted Successfully! Score: ${overallScore}/100</span>`;
         setTimeout(async () => {
@@ -920,6 +1001,12 @@ window.startInterviewFlow = function(selectedRole) {
     userText.textContent = "System standby...";
     navigateTo('view-interview');
     document.getElementById('roundTitleText').textContent = roleOption.title;
+    pendo.track('interview_session_started', {
+        role: selectedRole,
+        role_label: roleOption.label,
+        round_type: roleOption.round,
+        question_bank_size: interviewSession.bank.length
+    });
     startBtn.textContent = "Start Interview";
     startBtn.disabled = false;
 };
@@ -1207,11 +1294,13 @@ async function processAnswer(userInput) {
         voiceSteadiness: null
     };
     let llm;
+    let scoringSource = 'ai';
     try {
         llm = await gradeAnswerWithGemini(userInput, currentQuestion);
     } catch (error) {
         if (isLimitOrQuotaMessage(error.message)) {
             llm = getInterviewRubricFallback(userInput);
+            scoringSource = 'fallback';
         } else {
             aiText.textContent = `Google API Error: ${error.message}`;
             startBtn.textContent = "Retry"; startBtn.disabled = false;
@@ -1233,6 +1322,23 @@ async function processAnswer(userInput) {
         presence
     });
     interviewSession.latestScore = scoreSession(interviewSession.answers, interviewSession.role);
+    pendo.track('interview_answer_graded', {
+        question_id: currentQuestion.id,
+        question_topic: currentQuestion.topic,
+        question_number: questionCount,
+        transcript_word_count: delivery.words,
+        wpm: Math.round(delivery.wpm),
+        filler_rate: Math.round(delivery.fillerRate * 100) / 100,
+        response_latency_sec: delivery.latencySec != null ? Math.round(delivery.latencySec * 10) / 10 : null,
+        self_report_confidence: selfReport,
+        correctness_score: llm.correctness,
+        depth_score: llm.depth,
+        structure_score: llm.structure,
+        focus_percentage: presence.focusPct != null ? Math.round(presence.focusPct) : null,
+        tension_proxy: tensionProxy,
+        scoring_source: scoringSource,
+        role: interviewSession.role
+    });
 
     if (questionCount >= QUESTIONS_PER_ROUND) {
         renderInterviewReport();
@@ -1393,9 +1499,20 @@ async function saveSessionToSupabase(result, activityType = 'interview') {
             throw new Error(errResult.error || `HTTP ${response.status} ${response.statusText}`);
         }
         console.log("Session saved to Supabase.");
+        pendo.track('session_persisted', {
+            activity_type: activityType,
+            role: activityType === 'interview' ? (interviewSession?.role || 'default') : 'oa',
+            overall_score: result.overall,
+            save_success: true,
+            answer_count: activityType === 'interview' ? (interviewSession?.answers?.length || 0) : 0
+        });
     } catch (err) {
         // Non-critical — don't block the report if saving fails
         console.warn("Could not save session to Supabase:", err.message);
+        pendo.track('session_persisted', {
+            activity_type: activityType,
+            save_success: false
+        });
     }
 }
 
@@ -1512,6 +1629,17 @@ async function renderInterviewReport(isHistorical = false) {
         }).join('');
 
     navigateTo('view-report');
+    pendo.track('interview_session_completed', {
+        role: interviewSession.role,
+        role_label: interviewSession.roleLabel,
+        overall_score: Math.round(result.overall),
+        correctness_composite: Math.round(result.composites.correctness || 0),
+        communication_composite: Math.round(result.composites.communication || 0),
+        composure_composite: Math.round(result.composites.composure || 0),
+        weakest_topic: result.weakestTopic || 'N/A',
+        questions_answered: interviewSession.answers.length,
+        is_historical_review: isHistorical
+    });
     userText.textContent = "Interview complete.";
     await saveSessionToSupabase(result); 
     await refreshDashboardProfile();     
