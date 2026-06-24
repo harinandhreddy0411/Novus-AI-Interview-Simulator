@@ -21,6 +21,8 @@ const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 let currentUser = null;
 let intelligenceProfile = null;
+let pendoConversationId = null;
+let lastAgentMessageId = null;
 const AI_DAILY_LIMIT = 15;
 const GEMINI_MODEL_COOLDOWN_MS = 60 * 60 * 1000;
 const GEMINI_REQUEST_TIMEOUT_MS = 25000;
@@ -528,6 +530,7 @@ window.openPrepModal = async function(key) {
     const modal = document.getElementById('prepModal');
     const modalBody = document.getElementById('modalBody');
     modal.classList.add('active');
+    pendoConversationId = crypto.randomUUID();
 
     const cachedGuide = getCachedContent('prep-cache', key);
     if (cachedGuide) {
@@ -550,9 +553,28 @@ window.openPrepModal = async function(key) {
     else if (key === 'sysdesign') specializedPrompt = `You are a Principal Enterprise Systems Architect. Generate an exhaustive, textbook-grade infrastructure manual for Distributed System Design. Include detailed sections on Scaling paradigms, Layer 4 vs Layer 7 Load Balancing, Microservices, Caching Topologies, and Database Sharding (CAP Theorem). Format using clear HTML tags (<h2>, <h3>, <p>, <ul>, <pre>). Do not use Markdown backticks.`;
     else if (key === 'star') specializedPrompt = `You are an Executive Leadership Recruiter. Generate an exhaustive, definitive textbook manual on mastering behavioral interviews using the STAR method for FAANG+ institutions. Detail Core Leadership Competencies, the Situation/Task phase, deep dive into the Action phase, Quantifying Results, and answering the 'Failure' question. Format using clear HTML tags (<h2>, <h3>, <p>, <ul>, <pre>). Do not use Markdown backticks.`;
 
+    if (window.pendo?.trackAgent) {
+        window.pendo.trackAgent("prompt", {
+            agentId: "09YCS14tpfVEAhnUQqDfFGd53iA",
+            conversationId: pendoConversationId,
+            messageId: crypto.randomUUID(),
+            content: key,
+            suggestedPrompt: true
+        });
+    }
+
     try {
         // Using the unified Auto-Discovery function
         const generatedText = await callGeminiDynamic(specializedPrompt);
+        if (window.pendo?.trackAgent) {
+            window.pendo.trackAgent("agent_response", {
+                agentId: "09YCS14tpfVEAhnUQqDfFGd53iA",
+                conversationId: pendoConversationId,
+                messageId: crypto.randomUUID(),
+                content: generatedText,
+                modelUsed: activeResolvedModel
+            });
+        }
         setCachedContent('prep-cache', key, generatedText);
         modalBody.innerHTML = generatedText;
     } catch (err) {
@@ -622,8 +644,27 @@ window.moveOAQuestion = async function(direction) {
         
         const prompt = `You are a technical interviewer for ${currentCompanyKey}. Generate a completely original Data Structures and Algorithms coding problem focusing specifically on the topic of ${nextTopic}. Format the output EXACTLY like this in plain HTML (no markdown code blocks): <h3>[Problem Title]</h3><p>[Detailed description]</p><h4>Constraints:</h4><ul><li>[Constraint 1]</li></ul><h4>Example:</h4><pre style="background:rgba(0,0,0,0.3); padding:10px; border-radius:6px; border: 1px solid rgba(255,255,255,0.1);">Input: ... Output: ...</pre>`;
         
+        if (window.pendo?.trackAgent) {
+            window.pendo.trackAgent("prompt", {
+                agentId: "09YCS14tpfVEAhnUQqDfFGd53iA",
+                conversationId: pendoConversationId,
+                messageId: crypto.randomUUID(),
+                content: nextTopic,
+                suggestedPrompt: true
+            });
+        }
+
         try {
             const generatedText = await callGeminiDynamic(prompt);
+            if (window.pendo?.trackAgent) {
+                window.pendo.trackAgent("agent_response", {
+                    agentId: "09YCS14tpfVEAhnUQqDfFGd53iA",
+                    conversationId: pendoConversationId,
+                    messageId: crypto.randomUUID(),
+                    content: generatedText,
+                    modelUsed: activeResolvedModel
+                });
+            }
             window.oaQuestionsList.push({ html: generatedText });
             window.currentOAIndex = newIndex;
             problemText.innerHTML = window.oaQuestionsList[window.currentOAIndex].html;
@@ -649,6 +690,7 @@ window.launchOA = async function(companyKey) {
     navigateTo('view-oa');
     document.getElementById('oaTimer').textContent = "--:--"; // Wait for generation to finish
     currentCompanyKey = companyKey;
+    pendoConversationId = crypto.randomUUID();
     
     const oaTopics = ["Arrays", "Strings", "Hashing", "Trees", "Graphs", "Dynamic Programming", "Greedy", "Binary Search", "Sliding Window"];
     currentOATopic = oaTopics[Math.floor(Math.random() * oaTopics.length)];
@@ -680,9 +722,28 @@ window.launchOA = async function(companyKey) {
 
     const prompt = `You are a technical interviewer for ${companyKey}. Generate a completely original Data Structures and Algorithms coding problem focusing specifically on the topic of ${currentOATopic}. Format the output EXACTLY like this in plain HTML (no markdown code blocks): <h3>[Problem Title]</h3><p>[Detailed description]</p><h4>Constraints:</h4><ul><li>[Constraint 1]</li></ul><h4>Example:</h4><pre style="background:rgba(0,0,0,0.3); padding:10px; border-radius:6px; border: 1px solid rgba(255,255,255,0.1);">Input: ... Output: ...</pre>`;
 
+    if (window.pendo?.trackAgent) {
+        window.pendo.trackAgent("prompt", {
+            agentId: "09YCS14tpfVEAhnUQqDfFGd53iA",
+            conversationId: pendoConversationId,
+            messageId: crypto.randomUUID(),
+            content: companyKey,
+            suggestedPrompt: true
+        });
+    }
+
     try {
         // Using the unified Auto-Discovery function
         const generatedText = await callGeminiDynamic(prompt);
+        if (window.pendo?.trackAgent) {
+            window.pendo.trackAgent("agent_response", {
+                agentId: "09YCS14tpfVEAhnUQqDfFGd53iA",
+                conversationId: pendoConversationId,
+                messageId: crypto.randomUUID(),
+                content: generatedText,
+                modelUsed: activeResolvedModel
+            });
+        }
         document.getElementById('oaTitle').textContent = `${companyKey.toUpperCase()} Live OA`;
         
         window.oaQuestionsList = [{ html: generatedText }];
@@ -931,6 +992,7 @@ const videoElement = document.getElementById('webcam');
 window.startInterviewFlow = function(selectedRole) {
     const roleOption = ROLE_OPTIONS[selectedRole] || ROLE_OPTIONS.swe;
     currentRound = roleOption.round; questionCount = 0;
+    pendoConversationId = crypto.randomUUID();
     interviewSession = createInterviewSession(roleOption);
     currentQuestion = null;
     questionReadyAt = 0;
@@ -1210,6 +1272,14 @@ function promptSelfReport() {
 
 window.submitSelfReport = function(value) {
     document.getElementById('selfReportOverlay').classList.remove('active');
+    if (value != null && lastAgentMessageId && window.pendo?.trackAgent) {
+        window.pendo.trackAgent("user_reaction", {
+            agentId: "09YCS14tpfVEAhnUQqDfFGd53iA",
+            conversationId: pendoConversationId,
+            messageId: lastAgentMessageId,
+            content: value >= 4 ? "positive" : value <= 2 ? "negative" : "mixed"
+        });
+    }
     if (selfReportCallback) {
         selfReportCallback(value);
         selfReportCallback = null;
@@ -1228,6 +1298,16 @@ async function processAnswer(userInput) {
         tensionProxy,   // null if no FER model or too few frames
         voiceSteadiness: null
     };
+    if (window.pendo?.trackAgent) {
+        window.pendo.trackAgent("prompt", {
+            agentId: "09YCS14tpfVEAhnUQqDfFGd53iA",
+            conversationId: pendoConversationId,
+            messageId: crypto.randomUUID(),
+            content: userInput,
+            suggestedPrompt: false
+        });
+    }
+
     let llm;
     try {
         llm = await gradeAnswerWithGemini(userInput, currentQuestion);
@@ -1240,6 +1320,18 @@ async function processAnswer(userInput) {
             return;
         }
     }
+
+    const agentResponseMessageId = crypto.randomUUID();
+    if (window.pendo?.trackAgent) {
+        window.pendo.trackAgent("agent_response", {
+            agentId: "09YCS14tpfVEAhnUQqDfFGd53iA",
+            conversationId: pendoConversationId,
+            messageId: agentResponseMessageId,
+            content: JSON.stringify(llm),
+            modelUsed: activeResolvedModel
+        });
+    }
+    lastAgentMessageId = agentResponseMessageId;
 
     // Collect self-report confidence before storing and continuing
     const selfReport = await promptSelfReport();
