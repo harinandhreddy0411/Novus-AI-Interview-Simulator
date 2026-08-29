@@ -160,7 +160,11 @@ function isQuotaError(result, response) {
 
 function isRetryableModelError(result) {
     const message = (result.error?.message || "").toLowerCase();
-    return message.includes("only supports interactions api") || message.includes("not supported for generatecontent") || message.includes("not found for api version");
+    return message.includes("only supports interactions api") ||
+        message.includes("not supported for generatecontent") ||
+        message.includes("not found for api version") ||
+        message.includes("no longer available") ||
+        message.includes("please update your code to use");
 }
 
 function isLimitOrQuotaMessage(message) {
