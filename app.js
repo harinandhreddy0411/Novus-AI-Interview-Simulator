@@ -11,12 +11,12 @@ pendo.initialize({ visitor: { id: '' } });
 // 1. API CONFIGURATION & AUTO-DISCOVERY
 // ==========================================
 // Gemini key lives server-side in the Edge Function — never in client code
-const PROXY_URL = 'https://zzaqawcpqdbdymcugcfy.supabase.co/functions/v1/gemini-proxy';
+const PROXY_URL = 'https://fkuiddwuwyqknvufyzyn.supabase.co/functions/v1/gemini-proxy';
 let activeResolvedModel = null;
 let availableGeminiModels = null;
 
-const supabaseUrl = 'https://zzaqawcpqdbdymcugcfy.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6YXFhd2NwcWRiZHltY3VnY2Z5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNTc3NDQsImV4cCI6MjA5NjkzMzc0NH0.x2rQxZkOV8JicI3ElDjE6vpzmgqu78_VqtdTlPv88hU';
+const supabaseUrl = 'https://fkuiddwuwyqknvufyzyn.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrdWlkZHd1d3lxa252dWZ5enluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTI3ODQsImV4cCI6MjEwMzU2ODc4NH0.C9hWiaiCnZwQ71qAo3HLJR-ZV9PSf_UfKxBrZV-XsY8';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 let currentUser = null;
