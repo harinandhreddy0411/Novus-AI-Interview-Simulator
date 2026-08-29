@@ -169,7 +169,7 @@ function isRetryableModelError(result) {
 
 function isLimitOrQuotaMessage(message) {
     const lowerMessage = String(message || "").toLowerCase();
-    return lowerMessage.includes("quota") || lowerMessage.includes("rate-limit") || lowerMessage.includes("rate limit") || lowerMessage.includes("daily ai limit");
+    return lowerMessage.includes("quota") || lowerMessage.includes("rate-limit") || lowerMessage.includes("rate limit") || lowerMessage.includes("daily ai limit") || lowerMessage.includes("high demand") || lowerMessage.includes("overloaded") || lowerMessage.includes("unavailable");
 }
 
 function getPrepFallbackContent(key) {
@@ -623,15 +623,36 @@ window.moveOAQuestion = async function(direction) {
         
         const oaTopics = ["Arrays", "Strings", "Hashing", "Trees", "Graphs", "Dynamic Programming", "Greedy", "Binary Search", "Sliding Window"];
         const nextTopic = oaTopics[Math.floor(Math.random() * oaTopics.length)];
-        
+
+        // Try a real, verified question first — same as the initial launch.
+        const seeded = await fetchSeededQuestion(nextTopic);
+        if (seeded) {
+            window.oaQuestionsList.push({
+                html: `<h3>${seeded.title}</h3><p>${seeded.prompt}</p><p style="color: var(--success); font-size: 0.85em;">[Verified problem — this submission will be graded for real]</p>`,
+                seededData: seeded,
+            });
+            window.currentOAIndex = newIndex;
+            window.currentOAQuestionData = seeded;
+            problemText.innerHTML = window.oaQuestionsList[window.currentOAIndex].html;
+            terminal.innerHTML = `<span style="color: var(--success);">[System] Verified problem loaded. Real grading active.</span>`;
+            if (window.changeOALanguage) window.changeOALanguage(); // resets the editor to a clean template
+            setCachedContent('oa-cache', currentCompanyKey, { list: window.oaQuestionsList });
+            isGeneratingNextOA = false;
+            return;
+        }
+
+        window.currentOAQuestionData = null;
+        console.warn(`No seeded question for topic "${nextTopic}" — falling back to unscored AI-generated practice problem.`);
+
         const prompt = `You are a technical interviewer for ${currentCompanyKey}. Generate a completely original Data Structures and Algorithms coding problem focusing specifically on the topic of ${nextTopic}. Format the output EXACTLY like this in plain HTML (no markdown code blocks): <h3>[Problem Title]</h3><p>[Detailed description]</p><h4>Constraints:</h4><ul><li>[Constraint 1]</li></ul><h4>Example:</h4><pre style="background:rgba(0,0,0,0.3); padding:10px; border-radius:6px; border: 1px solid rgba(255,255,255,0.1);">Input: ... Output: ...</pre>`;
         
         try {
             const generatedText = await callGeminiDynamic(prompt);
-            window.oaQuestionsList.push({ html: generatedText });
+            window.oaQuestionsList.push({ html: generatedText, seededData: null });
             window.currentOAIndex = newIndex;
             problemText.innerHTML = window.oaQuestionsList[window.currentOAIndex].html;
-            terminal.innerHTML += `<br><span style="color: var(--success);">[System] Next problem generated.</span>`;
+            terminal.innerHTML = `<span style="color: var(--success);">[System] Next problem generated.</span>`;
+            if (window.changeOALanguage) window.changeOALanguage(); // resets the editor to a clean template
             
             setCachedContent('oa-cache', currentCompanyKey, { list: window.oaQuestionsList });
         } catch (err) {
@@ -644,8 +665,12 @@ window.moveOAQuestion = async function(direction) {
     
     window.currentOAIndex = newIndex;
     const problemText = document.getElementById('oaProblemText');
+    const terminal = document.getElementById('terminalLog');
     if (problemText && window.oaQuestionsList[window.currentOAIndex]) {
         problemText.innerHTML = window.oaQuestionsList[window.currentOAIndex].html || window.oaQuestionsList[window.currentOAIndex];
+        window.currentOAQuestionData = window.oaQuestionsList[window.currentOAIndex].seededData || null;
+        if (window.changeOALanguage) window.changeOALanguage(); // resets the editor to a clean template
+        if (terminal) terminal.innerHTML = `<span style="color: var(--success);">[System] Question loaded.</span>`;
     }
 };
 
@@ -693,7 +718,7 @@ window.launchOA = async function(companyKey) {
     if (seeded) {
         window.currentOAQuestionData = seeded;
         document.getElementById('oaTitle').textContent = `${companyKey.toUpperCase()} Verified OA`;
-        window.oaQuestionsList = [{ html: `<h3>${seeded.title}</h3><p>${seeded.prompt}</p><p style="color: var(--success); font-size: 0.85em;">[Verified problem — this submission will be graded for real]</p>` }];
+        window.oaQuestionsList = [{ html: `<h3>${seeded.title}</h3><p>${seeded.prompt}</p><p style="color: var(--success); font-size: 0.85em;">[Verified problem — this submission will be graded for real]</p>`, seededData: seeded }];
         window.currentOAIndex = 0;
         problemText.innerHTML = window.oaQuestionsList[0].html;
         terminal.innerHTML = `<span style="color: var(--success);">[System] Verified problem loaded. Real grading active.</span>`;
@@ -713,9 +738,10 @@ window.launchOA = async function(companyKey) {
         if (cachedProblem.content && cachedProblem.content.list) {
             window.oaQuestionsList = cachedProblem.content.list;
             window.currentOAIndex = 0;
+            window.currentOAQuestionData = window.oaQuestionsList[0].seededData || null;
             problemText.innerHTML = withCachedBadge(cachedProblem, window.oaQuestionsList[0].html);
         } else if (cachedProblem.content) {
-            window.oaQuestionsList = [{ html: cachedProblem.content }];
+            window.oaQuestionsList = [{ html: cachedProblem.content, seededData: null }];
             window.currentOAIndex = 0;
             problemText.innerHTML = withCachedBadge(cachedProblem, cachedProblem.content);
         }
@@ -734,7 +760,7 @@ window.launchOA = async function(companyKey) {
         const generatedText = await callGeminiDynamic(prompt);
         document.getElementById('oaTitle').textContent = `${companyKey.toUpperCase()} Live OA`;
         
-        window.oaQuestionsList = [{ html: generatedText }];
+        window.oaQuestionsList = [{ html: generatedText, seededData: null }];
         window.currentOAIndex = 0;
         setCachedContent('oa-cache', companyKey, { list: window.oaQuestionsList });
         
@@ -1444,37 +1470,34 @@ function compositeConfidence(answer, compositeName) {
 
 window.fetchIntelligenceProfile = async function() {
     if (!currentUser) return null;
+
+    // Query the real backend view instead of recomputing (incorrectly,
+    // and without topic mapping at all) from raw session rows client-side.
+    // security_invoker on the view means RLS on `sessions` still applies,
+    // so this only ever returns the current user's own aggregated row.
     const { data, error } = await supabase
-        .from('sessions')
-        .select('*');
-        
+        .from('student_intelligence_profile')
+        .select('*')
+        .maybeSingle();
+
     if (error) {
-        console.warn("Failed to fetch sessions:", error.message);
+        console.warn("Failed to fetch intelligence profile:", error.message);
         return null;
     }
-    
-    if (!data || data.length === 0) return null;
-    
-    const history_trend = data.map(session => ({
-        id: session.id,
-        date: session.created_at,
-        overall: session.overall_score || 0,
-        technical: session.composites?.correctness || 0,
-        communication: session.composites?.communication || 0,
-        composure: session.composites?.composure || 0,
-        confidence: 0 
-    })).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    const count = history_trend.length;
+    if (!data) return null;
+
     return {
-        session_count: count,
-        overall_readiness: history_trend.reduce((acc, curr) => acc + curr.overall, 0) / count,
-        avg_technical: history_trend.reduce((acc, curr) => acc + curr.technical, 0) / count,
-        avg_communication: history_trend.reduce((acc, curr) => acc + curr.communication, 0) / count,
-        avg_confidence: 0,
-        strong_topics: [],
-        weak_topics: [],
-        history_trend
+        session_count: data.session_count || 0,
+        overall_readiness: data.overall_readiness,
+        avg_technical: data.avg_technical,
+        avg_communication: data.avg_communication,
+        avg_composure: data.avg_composure,
+        avg_confidence: data.avg_confidence,
+        strong_topics: data.strong_topics || [],
+        weak_topics: data.weak_topics || [],
+        history_trend: data.history_trend || [],
+        confidence_trend: data.confidence_trend
     };
 };
 
