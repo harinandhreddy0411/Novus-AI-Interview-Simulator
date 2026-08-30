@@ -851,8 +851,18 @@ window.runTestCompilation = async function() {
     const userCode = window.cmEditor ? window.cmEditor.getValue() : document.getElementById('editorInput').value;
     terminal.innerHTML = `<span style="color: var(--primary);">[System] Packaging payload... Routing to container...</span><br>`;
 
+    // If a verified question is loaded, run against its first test case's
+    // real input so Compile & Run is actually useful for sanity-checking,
+    // not just a blind syntax check with no stdin.
+    const sampleStdin = (window.currentOAQuestionData && window.currentOAQuestionData.test_cases?.[0])
+        ? window.currentOAQuestionData.test_cases[0].input
+        : '';
+    if (sampleStdin) {
+        terminal.innerHTML += `<span style="color: var(--muted, #888);">[System] Using test case 1's input as stdin.</span><br>`;
+    }
+
     try {
-        const result = await executeViaWandbox(userCode, '', currentOALanguage);
+        const result = await executeViaWandbox(userCode, sampleStdin, currentOALanguage);
 
         if (result.compile_error) {
             terminal.innerHTML += `<br><span style="color: var(--danger);">[Compilation Error]</span><br><pre style="margin:0; white-space: pre-wrap; font-family:'Fira Code';">${result.compile_error}</pre>`;
