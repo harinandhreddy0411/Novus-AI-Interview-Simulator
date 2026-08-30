@@ -674,13 +674,9 @@ window.moveOAQuestion = async function(direction) {
     }
 };
 
-// Points at a small local proxy (local-piston-proxy.js) that sits in
-// front of your Piston Docker container — Piston itself sends no CORS
-// headers, so the browser can't call it directly. This ONLY works when
-// testing via `python -m http.server` (http://localhost:8000) with the
-// proxy also running locally. The live https:// site cannot reach this
-// until Piston is reachable over https (pending the whitelist request).
-const LOCAL_PISTON_URL = "http://localhost:3001/execute";
+// Note: real code execution now goes through Wandbox directly from the
+// browser (see executeViaWandbox() below) — replacing the dead public
+// Piston API. No proxy, no API key, no signup required.
 
 window.currentOAQuestionData = null; // set when a real seeded question is loaded
 
@@ -820,27 +816,53 @@ window.changeOALanguage = function() {
     }
 };
 
+// Wandbox (wandbox.org) — free, no signup, no API key, and its responses
+// include Access-Control-Allow-Origin: * (confirmed via the project's own
+// README), so it can be called directly from the browser. Replaces both
+// the dead public Piston API and the Judge0/RapidAPI path — no Edge
+// Function proxy needed for code execution at all.
+const WANDBOX_COMPILERS = {
+    python: "cpython-3.12.7",
+    javascript: "nodejs-20.17.0",
+    java: "openjdk-jdk-22+36",
+    cpp: "gcc-13.2.0",
+};
+
+async function executeViaWandbox(sourceCode, stdin, languageKey) {
+    const compiler = WANDBOX_COMPILERS[languageKey] || WANDBOX_COMPILERS.python;
+    const res = await fetch("https://wandbox.org/api/compile.json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ compiler, code: sourceCode, stdin: stdin || "" }),
+    });
+    if (!res.ok) throw new Error(`Wandbox error ${res.status}`);
+    const result = await res.json();
+    // Normalized shape, independent of Wandbox's specifics.
+    return {
+        stdout: result.program_output || "",
+        stderr: result.program_error || "",
+        compile_error: result.compiler_error || "",
+        status: result.status, // "0" = success
+    };
+}
+
 window.runTestCompilation = async function() {
     const terminal = document.getElementById('terminalLog');
     const userCode = window.cmEditor ? window.cmEditor.getValue() : document.getElementById('editorInput').value;
     terminal.innerHTML = `<span style="color: var(--primary);">[System] Packaging payload... Routing to container...</span><br>`;
 
     try {
-        const response = await fetch('https://emkc.org/api/v2/piston/execute', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ language: currentOALanguage, version: currentOAVersion, files: [{ content: userCode }] })
-        });
-        const result = await response.json();
+        const result = await executeViaWandbox(userCode, '', currentOALanguage);
 
-        if (result.compile && result.compile.code !== 0) {
-            terminal.innerHTML += `<br><span style="color: var(--danger);">[Compilation Error]</span><br><pre style="margin:0; white-space: pre-wrap; font-family:'Fira Code';">${result.compile.output}</pre>`;
-        } else if (result.run && result.run.code !== 0) {
-            terminal.innerHTML += `<br><span style="color: var(--warning);">[Runtime Exception]</span><br><pre style="margin:0; white-space: pre-wrap; font-family:'Fira Code';">${result.run.output}</pre>`;
+        if (result.compile_error) {
+            terminal.innerHTML += `<br><span style="color: var(--danger);">[Compilation Error]</span><br><pre style="margin:0; white-space: pre-wrap; font-family:'Fira Code';">${result.compile_error}</pre>`;
+        } else if (result.status !== "0" && result.status !== 0) {
+            terminal.innerHTML += `<br><span style="color: var(--warning);">[Runtime Exception]</span><br><pre style="margin:0; white-space: pre-wrap; font-family:'Fira Code';">${result.stderr || result.stdout}</pre>`;
         } else {
-            terminal.innerHTML += `<br><span style="color: var(--success);">[Execution Complete] Output:</span><br><pre style="margin:0; white-space: pre-wrap; color: #A7F3D0; font-family:'Fira Code';">${result.run.output}</pre>`;
+            terminal.innerHTML += `<br><span style="color: var(--success);">[Execution Complete] Output:</span><br><pre style="margin:0; white-space: pre-wrap; color: #A7F3D0; font-family:'Fira Code';">${result.stdout}</pre>`;
         }
     } catch (err) {
-        terminal.innerHTML += `<br><span style="color: var(--danger);">[Server Error] Could not reach execution engine.</span>`;
+        terminal.innerHTML += `<br><span style="color: var(--danger);">[Server Error] Could not reach execution engine: ${err.message}</span>`;
     }
 };
 
@@ -860,23 +882,14 @@ window.finishOA = async function() {
             const testsTotal = q.test_cases.length;
 
             for (const tc of q.test_cases) {
-                const pistonRes = await fetch(LOCAL_PISTON_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        language: 'python3',
-                        version: '3.10.0',
-                        files: [{ name: 'main.py', content: userCode }],
-                        stdin: tc.input,
-                    }),
-                });
-
-                if (!pistonRes.ok) continue; // counts as a fail for this test case
-
-                const result = await pistonRes.json();
-                const actual = (result?.run?.stdout ?? '').trim();
-                const expected = String(tc.expected_output).trim();
-                if (actual === expected) testsPassed++;
+                try {
+                    const result = await executeViaWandbox(userCode, tc.input, currentOALanguage);
+                    const actual = (result.stdout ?? '').trim();
+                    const expected = String(tc.expected_output).trim();
+                    if (actual === expected) testsPassed++;
+                } catch {
+                    // counts as a fail for this test case
+                }
             }
 
             const overallScore = Math.round((testsPassed / testsTotal) * 100);
